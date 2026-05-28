@@ -776,38 +776,38 @@ tr:hover td{background:#fafbfc}
     <div class="form-grid" style="margin-bottom:12px">
       <div class="form-group">
         <label class="form-label">Razão social *</label>
-        <input class="form-input" placeholder="Nome completo da empresa">
+        <input class="form-input" id="form-razao" placeholder="Nome completo da empresa">
       </div>
     </div>
     <div class="form-grid form-grid-2" style="margin-bottom:12px">
       <div class="form-group">
         <label class="form-label">CNPJ *</label>
-        <input class="form-input" placeholder="00.000.000/0000-00">
+        <input class="form-input" id="form-cnpj" placeholder="00.000.000/0000-00">
       </div>
       <div class="form-group">
         <label class="form-label">Estado</label>
-        <input class="form-input" placeholder="SP">
+        <input class="form-input" id="form-estado" placeholder="SP">
       </div>
     </div>
     <div class="form-grid form-grid-2" style="margin-bottom:12px">
       <div class="form-group">
         <label class="form-label">Inscrição estadual</label>
-        <input class="form-input" placeholder="000.000.000.000">
+        <input class="form-input" id="form-ie" placeholder="000.000.000.000">
       </div>
       <div class="form-group">
         <label class="form-label">Inscrição municipal</label>
-        <input class="form-input" placeholder="00000000">
+        <input class="form-input" id="form-im" placeholder="00000000">
       </div>
     </div>
     <div class="form-grid" style="margin-bottom:0">
       <div class="form-group">
         <label class="form-label">Município</label>
-        <input class="form-input" placeholder="SAO_PAULO">
+        <input class="form-input" id="form-municipio" placeholder="SAO_PAULO">
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="closeModal();showToast('Cliente salvo com sucesso!')">Salvar cliente</button>
+      <button class="btn btn-primary" onclick="salvarCliente()">Salvar cliente</button>
     </div>
   </div>
 </div>
@@ -908,13 +908,23 @@ function showHistorico(name, cnpj, status) {
 }
 
 // ── EMISSÃO SIMULADA ──
-function simularEmissao() {
-  const cnpj = document.getElementById('emit-cnpj').value || '12.345.678/0001-99';
+// ── WEBHOOKS N8N ──
+const WEBHOOK_EMITIR  = 'https://n8n-n8n.92nrsv.easypanel.host/webhook/emitir-cnd';
+const WEBHOOK_CLIENTE = 'https://n8n-n8n.92nrsv.easypanel.host/webhook/adicionar-cliente';
+
+async function simularEmissao() {
+  const cnpj     = document.getElementById('emit-cnpj').value.trim();
+  const estado   = document.getElementById('emit-estado').value.trim() || 'SP';
+  const municipio= document.getElementById('emit-municipio').value.trim() || 'SAO_PAULO';
+
+  if (!cnpj) { alert('Informe o CNPJ para continuar.'); return; }
+
   const pw = document.getElementById('progress-wrap');
   const rp = document.getElementById('result-panel');
   pw.classList.add('show');
   rp.style.display = 'none';
 
+  // Anima os itens do progresso enquanto aguarda resposta
   const portais = [
     'Federal — Receita Federal',
     'Estadual — SEFAZ',
@@ -922,7 +932,6 @@ function simularEmissao() {
     'Trabalhista — TST',
     'FGTS — Caixa Econômica'
   ];
-
   const pi = document.getElementById('progress-items');
   pi.innerHTML = portais.map(p => `
     <div class="progress-item">
@@ -936,46 +945,161 @@ function simularEmissao() {
   const labels = pi.querySelectorAll('.p-label');
   const tags   = pi.querySelectorAll('.p-tag');
   let idx = 0;
-
   const tick = setInterval(() => {
     if (idx > 0) {
       dots[idx-1].className = 'p-dot p-ok';
       labels[idx-1].classList.add('done');
-      tags[idx-1].textContent = 'Negativa ✓';
+      tags[idx-1].textContent = 'Consultando ✓';
       tags[idx-1].style.color = 'var(--ok)';
     }
-    if (idx < dots.length) {
-      dots[idx].className = 'p-dot p-loading';
-      idx++;
-    } else {
-      clearInterval(tick);
-      setTimeout(() => {
-        pw.classList.remove('show');
-        document.getElementById('result-name').textContent = 'Empresa Consultada Ltda';
-        document.getElementById('result-cnpj').textContent = cnpj;
-        document.getElementById('result-badge').textContent = 'Em dia';
-        document.getElementById('result-badge').className = 'badge badge-ok';
-        const certs = [
-          { n:'Federal', s:'ok', d:'01/05/2026' },
-          { n:'Estadual', s:'ok', d:'01/05/2026' },
-          { n:'Municipal', s:'ok', d:'01/05/2026' },
-          { n:'Trabalhista', s:'ok', d:'01/05/2026' },
-          { n:'FGTS', s:'ok', d:'01/05/2026' }
-        ];
-        document.getElementById('cert-grid').innerHTML = certs.map(c => `
-          <div class="cert-card cert-${c.s}">
-            <div class="cert-name">${c.n}</div>
-            <div class="cert-status">${c.s==='ok'?'Negativa':'Pendente'}</div>
-            <div class="cert-date">${c.d}</div>
-            <a class="cert-link">Ver PDF no OneDrive</a>
-          </div>
-        `).join('');
-        rp.style.display = 'block';
-        showToast('CNDs emitidas e salvas no OneDrive!');
-      }, 300);
-    }
-  }, 750);
+    if (idx < dots.length) { dots[idx].className = 'p-dot p-loading'; idx++; }
+  }, 800);
+
+  try {
+    const res = await fetch(WEBHOOK_EMITIR, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cnpj: cnpj.replace(/[^\d]/g,''), estado, municipio })
+    });
+
+    clearInterval(tick);
+    dots.forEach((d,i) => {
+      d.className = 'p-dot p-ok';
+      labels[i].classList.add('done');
+    });
+
+    const data = await res.json();
+    setTimeout(() => {
+      pw.classList.remove('show');
+      const ok = data.resultado === 'sem_debitos';
+      document.getElementById('result-name').textContent = data.razao_social || cnpj;
+      document.getElementById('result-cnpj').textContent = data.cnpj || cnpj;
+      document.getElementById('result-badge').textContent = ok ? 'Em dia' : 'Pendências encontradas';
+      document.getElementById('result-badge').className   = ok ? 'badge badge-ok' : 'badge badge-warn';
+
+      const certs = ['Federal','Estadual','Municipal','Trabalhista','FGTS'];
+      const pendentes = data.pendentes || [];
+      document.getElementById('cert-grid').innerHTML = certs.map(c => {
+        const s = pendentes.includes(c) ? 'warn' : 'ok';
+        return `
+          <div class="cert-card cert-${s}">
+            <div class="cert-name">${c}</div>
+            <div class="cert-status">${s==='ok'?'Negativa':'Pendente'}</div>
+            <div class="cert-date">${new Date().toLocaleDateString('pt-BR')}</div>
+            <a class="cert-link">Ver PDF no Drive</a>
+          </div>`;
+      }).join('');
+
+      rp.style.display = 'block';
+      showToast(ok ? '✅ CNDs emitidas e salvas no Google Drive!' : '⚠️ Pendências encontradas — tarefa criada no ClickUp!');
+    }, 400);
+
+  } catch(e) {
+    clearInterval(tick);
+    pw.classList.remove('show');
+    alert('Erro ao conectar ao N8N.\nVerifique se o fluxo está ativo e tente novamente.');
+  }
+}
+
+async function salvarCliente() {
+  const payload = {
+    cnpj:                document.getElementById('form-cnpj').value.trim(),
+    razao_social:        document.getElementById('form-razao').value.trim(),
+    estado:              document.getElementById('form-estado').value.trim(),
+    municipio:           document.getElementById('form-municipio').value.trim(),
+    inscricao_estadual:  document.getElementById('form-ie').value.trim(),
+    inscricao_municipal: document.getElementById('form-im').value.trim(),
+    email:               document.getElementById('form-email').value.trim(),
+    ativo: 'sim'
+  };
+  if (!payload.cnpj || !payload.razao_social) {
+    alert('CNPJ e Razão Social são obrigatórios.'); return;
+  }
+  try {
+    await fetch(WEBHOOK_CLIENTE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    closeModal();
+    showToast('✅ Cliente salvo no Google Sheets!');
+  } catch(e) {
+    alert('Erro ao salvar cliente. Tente novamente.');
+  }
 }
 </script>
+
+<!-- ── TELA DE LOGIN ── -->
+<div id="login-screen" style="
+  position:fixed;inset:0;z-index:9999;
+  background:#f0f2f5;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'DM Sans',sans-serif;
+">
+  <div style="
+    background:#fff;border:1px solid #e2e5eb;
+    border-radius:16px;padding:40px 36px;
+    width:380px;box-shadow:0 8px 32px rgba(0,0,0,.12);
+    text-align:center;
+  ">
+    <div style="width:52px;height:52px;background:#1a56db;border-radius:14px;margin:0 auto 20px;display:flex;align-items:center;justify-content:center;">
+      <svg viewBox="0 0 24 24" style="width:26px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round">
+        <rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+      </svg>
+    </div>
+    <h2 style="font-size:20px;font-weight:700;margin-bottom:4px;color:#111827">LSA Contábil</h2>
+    <p style="font-size:13px;color:#6b7280;margin-bottom:28px">CND Manager — acesso restrito à equipe</p>
+    <input id="login-user" type="text" placeholder="Usuário" autocomplete="username" style="
+      width:100%;padding:11px 14px;margin-bottom:10px;
+      border:1px solid #e2e5eb;border-radius:8px;
+      font-family:'DM Sans',sans-serif;font-size:13px;
+      outline:none;box-sizing:border-box;
+    ">
+    <input id="login-pass" type="password" placeholder="Senha" autocomplete="current-password"
+      onkeydown="if(event.key==='Enter')fazerLogin()" style="
+      width:100%;padding:11px 14px;margin-bottom:16px;
+      border:1px solid #e2e5eb;border-radius:8px;
+      font-family:'DM Sans',sans-serif;font-size:13px;
+      outline:none;box-sizing:border-box;
+    ">
+    <div id="login-erro" style="color:#b91c1c;font-size:12px;margin-bottom:14px;display:none;background:#fef2f2;padding:8px;border-radius:6px;">
+      ❌ Usuário ou senha incorretos
+    </div>
+    <button onclick="fazerLogin()" style="
+      width:100%;padding:11px;background:#1a56db;color:#fff;
+      border:none;border-radius:8px;font-size:14px;font-weight:600;
+      cursor:pointer;font-family:'DM Sans',sans-serif;transition:.15s;
+    " onmouseover="this.style.background='#1341b0'" onmouseout="this.style.background='#1a56db'">
+      Entrar
+    </button>
+    <p style="font-size:11px;color:#9ca3af;margin-top:16px">LSA Contábil © 2026 — uso interno</p>
+  </div>
+</div>
+
+<script>
+// ── USUÁRIOS — ALTERE AS SENHAS ANTES DE PUBLICAR ──
+const USUARIOS = {
+  'admin':    'lsa@2026',
+  'mauricio': 'cnd@lsa'
+};
+
+function fazerLogin() {
+  const u = document.getElementById('login-user').value.trim();
+  const p = document.getElementById('login-pass').value;
+  const erro = document.getElementById('login-erro');
+  if (USUARIOS[u] && USUARIOS[u] === p) {
+    document.getElementById('login-screen').style.display = 'none';
+    sessionStorage.setItem('lsa_auth', 'ok');
+    erro.style.display = 'none';
+  } else {
+    erro.style.display = 'block';
+  }
+}
+
+if (sessionStorage.getItem('lsa_auth') === 'ok') {
+  document.getElementById('login-screen').style.display = 'none';
+}
+</script>
+
 </body>
 </html>
