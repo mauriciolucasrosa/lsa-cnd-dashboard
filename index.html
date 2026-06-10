@@ -909,8 +909,8 @@ function showHistorico(name, cnpj, status) {
 
 // ── EMISSÃO SIMULADA ──
 // ── WEBHOOKS N8N ──
-const WEBHOOK_EMITIR  = 'https://n8n-n8n.92nrsv.easypanel.host/webhook/emitir-cnd';
-const WEBHOOK_CLIENTE = 'https://n8n-n8n.92nrsv.easypanel.host/webhook/adicionar-cliente';
+const WEBHOOK_EMITIR  = '/api/emitir-cnd';
+const WEBHOOK_CLIENTE = '/api/adicionar-cliente';
 
 async function simularEmissao() {
   const cnpj     = document.getElementById('emit-cnpj').value.trim();
