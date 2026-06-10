@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/api/emitir-cnd", "destination": "/api/emitir-cnd" },
+    { "source": "/api/adicionar-cliente", "destination": "/api/adicionar-cliente" }
+  ]
+}
